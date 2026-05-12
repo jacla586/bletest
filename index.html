@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DiscCounter G3</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #121212; color: white; padding-top: 50px; }
+        #hits { font-size: 8rem; font-weight: bold; color: #00ff88; margin: 20px 0; }
+        button { background: #0088ff; color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 50px; cursor: pointer; }
+        button:disabled { background: #555; }
+        .status { color: #888; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <h1>DiscCounter G3</h1>
+    <p class="status" id="status">Klicka på knappen för att ansluta korgen</p>
+    
+    <div id="hits">0</div>
+    
+    <button id="connectBtn">ANSLUT KORG</button>
+
+    <script>
+        const connectBtn = document.getElementById('connectBtn');
+        const hitsDisplay = document.getElementById('hits');
+        const statusText = document.getElementById('status');
+
+        // Dessa UUID:n MÅSTE matcha din ESP32-kod exakt
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                statusText.innerText = "Söker efter korg...";
+                
+                // 1. Fråga efter enheten
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'DiscCounter_Gabe' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                statusText.innerText = "Ansluter...";
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+                statusText.innerText = "Kopplad! Väntar på träffar...";
+                connectBtn.disabled = true;
+
+                // 2. Starta prenumeration på "Notify"
+                await characteristic.startNotifications();
+                
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    // Vi läser av värdet som en 32-bitars Integer (Little Endian)
+                    const value = event.target.value.getInt32(0, true);
+                    hitsDisplay.innerText = value;
+                });
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusText.innerText = "Anslutning bröts. Ladda om sidan.";
+                    connectBtn.disabled = false;
+                });
+
+            } catch (error) {
+                console.error(error);
+                statusText.innerText = "Fel: " + error;
+            }
+        });
+    </script>
+</body>
+</html>
